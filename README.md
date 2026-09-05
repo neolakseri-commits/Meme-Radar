@@ -1,69 +1,164 @@
-# Meme Radar
+<div align="center">
 
-Terminal intelligence for new pons v2 launches on Robinhood Chain.
+<img src="assets/meme-radar-icon.svg" width="112" alt="Meme Radar icon" />
 
-Meme Radar is deliberately read-only. It does not hold a key and does not send trades. It listens for new launches, builds an evidence profile, and explains why a token looks unusual.
+# MEME RADAR
 
-## Run
+### Onchain launch intelligence for Robinhood Chain
 
-Requires Node.js 20+.
+<img src="assets/meme-radar-banner.svg" alt="Meme Radar — onchain launch intelligence" />
+
+<p>
+  <a href="https://github.com/neolakseri-commits/Meme-Radar/actions"><img src="https://img.shields.io/github/actions/workflow/status/neolakseri-commits/Meme-Radar/ci.yml?label=checks&style=flat-square" alt="checks" /></a>
+  <img src="https://img.shields.io/badge/mode-read--only-ff9b42?style=flat-square" alt="read-only" />
+  <img src="https://img.shields.io/badge/runtime-Node%2020%2B-ff9b42?style=flat-square" alt="Node 20+" />
+  <img src="https://img.shields.io/badge/chain-Robinhood%204663-ff9b42?style=flat-square" alt="Robinhood Chain" />
+  <img src="https://img.shields.io/badge/license-MIT-ff9b42?style=flat-square" alt="MIT license" />
+</p>
+
+<p><strong>Find the unusual launch. Read the evidence. Decide for yourself.</strong></p>
+
+</div>
+
+## What it does
+
+Meme Radar watches Robinhood Chain launches and turns the first observable activity into a compact, explainable profile. It is a local terminal tool for research and triage — it does not trade, custody funds, or ask for a private key.
+
+| Question | Evidence | Terminal answer |
+| --- | --- | --- |
+| Is this launch unusual? | launch state, curve, tax, early flow | `SCORE 87/100` |
+| Is the deployer experienced? | prior launches and graduations | `deployer history` |
+| Is the early demand broad? | first curve buys and unique buyers | `14 independent buyers` |
+| Is supply concentrated? | creator buy and observed early wallets | `18% concentration` |
+| Does it resemble a farm? | repeated deployer and wallet fingerprints | `farm warning` |
+
+The output is deliberately evidence-first. A score is only useful when the reasons underneath it are visible.
+
+## Quick start
 
 ```bash
 npm install
-copy .env.example .env
+cp .env.example .env
 npm run doctor
 npm run hunt
 ```
 
-Useful commands:
+PowerShell:
+
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run doctor
+npm run hunt
+```
+
+Run the offline demo without RPC access:
 
 ```bash
-npm run hunt -- --min-score 70
-npm run hunt -- --json --for 300
-npm run scan -- 0xTokenAddress
 npm run demo
 ```
 
-The live feed is intentionally terminal-first and read-only:
+Inspect one token directly:
 
-```text
-════════════════════════════════════════════════════════════════════════════
-  RADAR  onchain launch intelligence · Robinhood Chain · 4663
-  live discovery feed
-════════════════════════════════════════════════════════════════════════════
-  feed       websocket
-  history    400000 blocks
-  session    0 launches · 0 signals · 0 watch
-────────────────────────────────────────────────────────────────────────────
-13:52:34  $TOKEN  SIGNAL  score  87/100  curve
-  WILLOW ROAD  0x36fe…2eB9  █████████░
-
-+15 dev buy 2.10%
-+10 creator tax 0.00%
-+10 14 early buyers
--10 supply concentration 18.0%
-
-  dev buy          2.10%  0.2100 ETH
-  curve liquidity  24.8%  2.0060 / 8.0900 ETH
-  opening tax      0.19%
-  early flow       14 buyers / 16 buys · 2 taxed
-  supply top       18.0% to one recipient
+```bash
+npm run scan -- 0xTokenAddress
 ```
 
-## What it measures
+## Commands
 
-- launch and deployer history;
-- dev buy decoded from the launch transaction when the canonical launch router was used;
-- creator tax and current opening tax;
-- declared exempt wallets;
-- early buy count, unique buyers, buyer speed and recipient mismatches;
-- early supply concentration from curve buy events;
-- curve fill and graduation proximity;
-- repeated launch fingerprints across different deployers;
-- explicit data gaps when a public RPC cannot provide native funding traces.
+| Command | Purpose | Network |
+| --- | --- | --- |
+| `npm run demo` | Render a realistic sample report | no |
+| `npm run doctor` | Check RPC connectivity and configured chain | yes |
+| `npm run hunt` | Follow new launches and print scored profiles | yes |
+| `npm run scan -- <address>` | Enrich and score one token | yes |
+| `npm run backfill` | Inspect a recent block window | yes |
+| `npm run typecheck` | Validate TypeScript without emitting files | no |
+| `npm test` | Run scoring and behavior tests | no |
 
-## Honest boundary
+Useful options:
 
-Funding-wallet and cross-wallet clustering cannot be inferred reliably from ordinary `eth_call`/`eth_getLogs` alone. Meme Radar exposes this as an adapter boundary instead of inventing labels. A later indexer adapter can populate that evidence without changing the scoring contract.
+```bash
+npm run hunt -- --no-history --for 60
+npm run backfill -- --blocks 100
+npm run scan -- 0xTokenAddress --json
+```
 
-This project is an independent implementation. It uses public protocol information and is not affiliated with pons or Robinhood.
+## Example
+
+```text
+╭─ $MELON / 0xabc…def ─────────────────────────────────────────────╮
+│ SIGNAL  87/100   launch age 42s   curve 12.4%   buyers 14       │
+│                                                                  │
+│ + dev bought 2.1%                                                │
+│ + 14 independent buyers observed                                │
+│ + liquidity/curve activity is growing                            │
+│ + deployer has prior graduated launches                          │
+│                                                                  │
+│ - 2 linked wallets                                                │
+│ - 18% observed supply concentration                              │
+│                                                                  │
+│ verdict: unusual launch — review the evidence before acting     │
+╰──────────────────────────────────────────────────────────────────╯
+```
+
+The exact fields depend on what the chain exposes for the launch and the configured observation window. Missing evidence is shown as missing; it is not silently converted into a positive signal.
+
+## Signal model
+
+| Signal | Why it matters | Current implementation |
+| --- | --- | --- |
+| Creator buy | A meaningful creator position changes launch risk | canonical launch transaction when available |
+| Early buyers | Breadth is more informative than a single large buy | decoded curve buy events |
+| Supply concentration | Detects a launch dominated by a small set of wallets | observed early transfer/buy window |
+| Tax and curve state | A high opening tax or unusual curve state can invalidate a setup | factory and token reads |
+| Deployer history | Serial launches and graduations provide context | local history/index adapter |
+| Wallet fingerprints | Repeated funding or synchronized wallets can indicate farming | warning only when adapter data exists |
+
+Scoring rules are readable and intentionally conservative. See [`docs/SIGNALS.md`](docs/SIGNALS.md) for the current weights and caveats.
+
+## Project layout
+
+```text
+MemeRadar/
+├─ assets/       GitHub hero banner and project icon
+├─ docs/         getting started, signals, architecture, limitations
+├─ src/          CLI, chain reads, enrichment, scoring, rendering
+├─ test/         deterministic scoring tests
+├─ .env.example  safe configuration template
+├─ LICENSE       MIT license
+└─ README.md     product overview and operating guide
+```
+
+## Design principles
+
+- **Read-only by default.** No wallet, signer, swap, or custody code.
+- **Explainable output.** Every score is accompanied by positive and negative reasons.
+- **Honest uncertainty.** Unsupported evidence is reported as unavailable.
+- **Terminal-first.** The tool is useful over SSH, in a local shell, or alongside another trading workflow.
+- **Small surface area.** The first version favors a reliable observer over a noisy dashboard.
+
+## Limitations
+
+This is an intelligence prototype, not a guarantee of safety or profit. Funding-wallet clusters, full historical deployer graphs, and richer liquidity analytics require a dedicated indexer or trace provider. Early concentration is limited to the observation window. RPC availability and event indexing can also affect freshness.
+
+Read [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) before using live output.
+
+## Development
+
+```bash
+npm run typecheck
+npm test
+npm run build
+npm run demo
+```
+
+The CI workflow runs these checks on Node 20 and Node 22. Generated `dist/`, `node_modules/`, local caches, and `.env` files are intentionally ignored by Git.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+<div align="center">
+  <sub>Built for research on Robinhood Chain. Never treat a score as financial advice.</sub>
+</div>
