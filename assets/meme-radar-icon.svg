@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">Meme Radar icon</title>
+  <rect width="256" height="256" rx="34" fill="#11100f"/>
+  <path d="M26 26h204v204H26z" fill="none" stroke="#3b2a20" stroke-width="2" stroke-dasharray="3 8"/>
+  <g transform="translate(128 128)" fill="none" stroke="#ff9b42" stroke-width="8">
+    <circle r="88" opacity=".25"/>
+    <circle r="56" opacity=".5"/>
+    <path d="M0-88v18M0 70v18M-88 0h18M70 0h18M-62-62l13 13M49 49l13 13M62-62L49-49M-49 49l-13 13"/>
+    <path d="M0 0 57-47"/>
+    <circle r="12" fill="#ff9b42"/>
+  </g>
+</svg>
