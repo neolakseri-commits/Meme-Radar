@@ -15,4 +15,6 @@ export const config = {
   earlyBlocks: positiveInt("RADAR_EARLY_BLOCKS", 600),
   logChunk: positiveInt("RADAR_LOG_CHUNK", 25_000),
   maxFirstBuys: positiveInt("RADAR_MAX_FIRST_BUYS", 1_000),
+  // Show the ⚡ TRADE quick-action strip (Pump.fun / FOMO apps + native venues).
+  fomo: process.env.RADAR_FOMO?.trim().toLowerCase() !== "off",
 };

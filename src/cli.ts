@@ -12,6 +12,8 @@ import type { LaunchProfile } from "./types.js";
 
 const program = new Command();
 program.name("meme-radar").description("Terminal intelligence radar for pons v2 launches on Robinhood Chain").version("0.1.0");
+program.option("--no-fomo", "hide the quick-trade (Pump.fun / FOMO) action strip");
+program.on("option:no-fomo", () => { config.fomo = false; });
 
 const address = (value: string): Address => {
   if (!isAddress(value)) throw new Error(`invalid address: ${value}`);
@@ -36,7 +38,7 @@ async function show(profile: LaunchProfile, json: boolean, minScore: number): Pr
   const twins = matchingTwins(profile);
   const result = scoreProfile(profile, twins);
   if (result.total < minScore) return;
-  console.log(json ? toJson(profile, result) : `${render(profile, result)}\n${"─".repeat(78)}`);
+  console.log(json ? toJson(profile, result) : render(profile, result));
 }
 
 program.command("doctor").description("check RPC and Pons factory").action(async () => {
