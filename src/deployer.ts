@@ -9,7 +9,7 @@ const launchEvent = parseAbiItem("event TokenLaunched(address indexed token, add
 
 export class DeployerIndex {
   private readonly launches = new Map<string, { token: Address; block: bigint }[]>();
-  private readonly graduated = new Set<string>();
+  private readonly graduated = new Map<string, bigint>(); // token -> graduation block
   private ready = false;
 
   async build(blocks = config.historyBlocks): Promise<void> {
@@ -29,7 +29,7 @@ export class DeployerIndex {
         list.push({ token: a.token, block: log.blockNumber });
         this.launches.set(key, list);
       }
-      for (const log of grads) if (log.args.token) this.graduated.add(log.args.token.toLowerCase());
+      for (const log of grads) if (log.args.token && log.blockNumber !== null) this.graduated.set(log.args.token.toLowerCase(), log.blockNumber);
     }
     this.ready = true;
   }
@@ -48,6 +48,7 @@ export class DeployerIndex {
     return { launches: list.length, graduated, onCurve: Math.max(0, list.length - graduated), firstSeenBlock: list.length ? list[0].block : null };
   }
 
-  markGraduated(token: Address): void { this.graduated.add(token.toLowerCase()); }
+  graduationBlock(token: Address): bigint | null { return this.graduated.get(token.toLowerCase()) ?? null; }
+  markGraduated(token: Address, block = 0n): void { this.graduated.set(token.toLowerCase(), block); }
   isReady(): boolean { return this.ready; }
 }

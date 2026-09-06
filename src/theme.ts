@@ -33,6 +33,7 @@ export const badge = {
   watch: (v: string) => c.bold(bg(255, 210, 63, 30, 26, 12, ` ${v} `)),
   none: (v: string) => c.bold(bg(120, 110, 102, 18, 16, 14, ` ${v} `)),
   live: (v: string) => c.bold(bg(74, 222, 128, 12, 24, 16, ` ${v} `)),
+  danger: (v: string) => c.bold(bg(255, 92, 92, 24, 12, 12, ` ${v} `)),
 };
 
 // OSC 8 hyperlink — turns any label into a clickable "button" in iTerm2,

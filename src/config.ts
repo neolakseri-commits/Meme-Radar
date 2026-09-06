@@ -17,4 +17,8 @@ export const config = {
   maxFirstBuys: positiveInt("RADAR_MAX_FIRST_BUYS", 1_000),
   // Show the ⚡ TRADE quick-action strip (Pump.fun / FOMO apps + native venues).
   fomo: process.env.RADAR_FOMO?.trim().toLowerCase() !== "off",
+  // Persistent wallet/launch memory for cluster + Deployer DNA intelligence.
+  historyFile: process.env.RADAR_HISTORY_FILE?.trim() === "off" ? null : (process.env.RADAR_HISTORY_FILE?.trim() || ".meme-radar-history.json"),
+  // Resolve funding sources via Blockscout (extra HTTP per wallet). Off by default.
+  funding: process.env.RADAR_FUNDING?.trim().toLowerCase() === "on",
 };

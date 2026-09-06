@@ -35,6 +35,12 @@ export function scoreProfile(p: LaunchProfile, twins = 0): ScoreResult {
   }
   if (twins >= 2) add(-25, `${twins + 1} matching fingerprints: likely farm`);
   else if (twins === 1) add(-8, "one matching launch fingerprint");
+  if (p.clusters) {
+    const insider = p.clusters.clusters.find((c) => c.kind === "insider");
+    if (insider) add(-Math.min(25, Math.round(insider.confidence / 4)), `insider cluster ${insider.confidence}%`);
+    else if (p.clusters.clusters.some((c) => c.kind === "bundle")) add(-8, "coordinated bundle cluster");
+    else if (p.clusters.totalBuyers >= 8 && p.clusters.clusters.length === 0) add(6, "demand looks independent");
+  }
   if (p.curve.fillPct >= 25 && p.buyers.firstWindowUniqueBuyers >= 10) add(8, `curve fill ${p.curve.fillPct.toFixed(1)}% with broad early flow`);
   const total = Math.max(0, Math.min(100, score));
   return { total, verdict: total >= 75 ? "SIGNAL" : total >= 45 ? "WATCH" : "NO SIGNAL", reasons };

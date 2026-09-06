@@ -20,6 +20,7 @@ export const curveAbi = parseAbi([
   "function pairToken() view returns (address)",
   "function launchedAt() view returns (uint256)",
   "event CurveBuy(address indexed buyer, address indexed recipient, uint256 quoteIn, uint256 tokensOut, uint256 fee, uint256 tax)",
+  "event CurveSell(address indexed seller, address indexed recipient, uint256 tokensIn, uint256 quoteOut, uint256 fee, uint256 tax)",
 ]);
 
 export const tokenAbi = parseAbi([
@@ -27,6 +28,7 @@ export const tokenAbi = parseAbi([
   "function getTokenInfo() view returns (address tokenDeployer, string tokenLogo, string tokenDescription, Socials tokenSocials)",
   "function name() view returns (string)",
   "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
   "function totalSupply() view returns (uint256)",
 ]);
 

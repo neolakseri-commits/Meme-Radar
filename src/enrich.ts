@@ -4,6 +4,40 @@ import { ADDR, rpc } from "./chain.js";
 import { config } from "./config.js";
 import type { BuyerMetrics, BuySample, LaunchEvent, LaunchProfile, Socials, PhaseName } from "./types.js";
 import type { DeployerIndex } from "./deployer.js";
+import type { WalletHistory } from "./history.js";
+import { analyzeClusters } from "./clusters.js";
+import { buildDNA } from "./dna.js";
+import { computeMarket, computeFlow, buildTape, type SellSample } from "./market.js";
+
+const curveSellEvent = parseAbiItem("event CurveSell(address indexed seller, address indexed recipient, uint256 tokensIn, uint256 quoteOut, uint256 fee, uint256 tax)");
+
+async function earlySells(ev: LaunchEvent): Promise<SellSample[]> {
+  const head = await rpc.getBlockNumber();
+  const end = ev.blockNumber + BigInt(config.earlyBlocks) < head ? ev.blockNumber + BigInt(config.earlyBlocks) : head;
+  const out: SellSample[] = [];
+  try {
+    for (let start = ev.blockNumber; start <= end; start += BigInt(config.logChunk)) {
+      const to = start + BigInt(config.logChunk) - 1n > end ? end : start + BigInt(config.logChunk) - 1n;
+      const logs = await rpc.getLogs({ address: ev.curve, event: curveSellEvent, fromBlock: start, toBlock: to });
+      for (const log of logs.slice(0, config.maxFirstBuys)) {
+        const a = (log as { args: { seller?: Address; quoteOut?: bigint; tax?: bigint }; blockNumber?: bigint }).args;
+        if (!a.seller || a.quoteOut === undefined) continue;
+        out.push({ seller: a.seller, quoteOut: a.quoteOut, tax: a.tax ?? 0n, block: (log as { blockNumber?: bigint }).blockNumber ?? ev.blockNumber });
+      }
+    }
+  } catch { /* chains without a CurveSell event simply report no sells */ }
+  return out;
+}
+
+async function quoteMeta(pairToken: Address): Promise<{ symbol: string; decimals: number }> {
+  if (pairToken.toLowerCase() === ADDR.zero.toLowerCase()) return { symbol: "ETH", decimals: 18 };
+  const p = { address: pairToken, abi: tokenAbi } as const;
+  const [symbol, decimals] = await Promise.all([
+    rpc.readContract({ ...p, functionName: "symbol" }).catch(() => "HOOD"),
+    rpc.readContract({ ...p, functionName: "decimals" }).catch(() => 18),
+  ]);
+  return { symbol: String(symbol), decimals: Number(decimals) };
+}
 
 const emptySocials = (): Socials => ({ twitter: "", telegram: "", discord: "", website: "", farcaster: "" });
 const phaseName = (n: number): PhaseName => (["curve", "swept", "pool", "rescued"] as const)[n] ?? "unknown";
@@ -60,7 +94,18 @@ function buyerMetrics(buys: BuySample[], totalSupply: bigint, early: boolean): B
   return { buys: buys.length, uniqueBuyers: buyerSet.size, uniqueRecipients: recipientSet.size, firstWindowBuys: early ? buys.length : 0, firstWindowUniqueBuyers: early ? buyerSet.size : 0, topRecipientSharePct: topSharePct, taxedBuys: taxed, recipientMismatches: mismatches, totalQuoteIn: quote, totalTokensOut: tokens };
 }
 
-export async function enrichLaunch(ev: LaunchEvent, index?: DeployerIndex): Promise<LaunchProfile> {
+export interface EnrichContext {
+  index?: DeployerIndex;
+  history?: WalletHistory;
+  /** Optional adapter: resolve wallet(lowercased) -> funding source (lowercased). */
+  fundingResolver?: (wallets: string[]) => Promise<Map<string, string>>;
+}
+
+export async function enrichLaunch(ev: LaunchEvent, ctx: DeployerIndex | EnrichContext = {}): Promise<LaunchProfile> {
+  // Back-compat: callers may still pass a DeployerIndex directly.
+  const context: EnrichContext = ctx && "stats" in ctx ? { index: ctx as DeployerIndex } : (ctx as EnrichContext);
+  const index = context.index;
+  const history = context.history ?? null;
   const f = { address: ADDR.factory, abi: factoryAbi } as const;
   const t = { address: ev.token, abi: tokenAbi } as const;
   const c = { address: ev.curve, abi: curveAbi } as const;
@@ -91,8 +136,66 @@ export async function enrichLaunch(ev: LaunchEvent, index?: DeployerIndex): Prom
   let openingTaxBps: bigint | null = null;
   try { openingTaxBps = await rpc.readContract({ ...c, functionName: "currentSnipeTaxBps", args: [tx.recipient ?? ev.deployer] }); } catch { /* some routes do not expose this getter */ }
   const fingerprint = [tx.devBuyWei?.toString() ?? "?", String(Number(creatorTax as bigint)), Object.values(socials).filter(Boolean).map((s) => s.toLowerCase()).sort().join(","), String(tx.exemptions.length)].join("|");
-  const gaps: string[] = ["native funding traces and cross-wallet clusters require an indexer adapter"];
+  // Optional funding-source resolution (Blockscout adapter, off by default).
+  let funding: Map<string, string> | null = null;
+  if (context.fundingResolver) {
+    const wallets = [...new Set(buys.map((b) => b.buyer.toLowerCase()))];
+    funding = await context.fundingResolver(wallets).catch(() => null);
+  }
+
+  const gaps: string[] = [];
+  if (!funding) gaps.push("funding-source links need a funding adapter (set RADAR_FUNDING=on)");
   if (!tx.devBuyWei) gaps.push("dev buy could not be decoded from this launch transaction route");
+
+  // Wallet Intelligence Graph + Deployer DNA.
+  const clusters = analyzeClusters(buys, history, ev.deployer, ev.token, { funding: funding ?? undefined });
+  const dna = buildDNA(ev.deployer, stats, history);
+
+  // Live market read (price / mcap / liquidity in the quote token), trade flow,
+  // and the tape — the things a trader actually acts on.
+  const [sells, qMeta, tokenDecRaw] = await Promise.all([
+    earlySells(ev),
+    quoteMeta(ev.pairToken),
+    rpc.readContract({ ...t, functionName: "decimals" }).catch(() => 18),
+  ]);
+  const tokenDecimals = Number(tokenDecRaw);
+  const [quoteReserve, tokenReserve] = (reserve as readonly [bigint, bigint]) ?? [0n, 0n];
+  const qn = Number(quoteReserve) / 10 ** qMeta.decimals;
+  const tn = Number(tokenReserve) / 10 ** tokenDecimals;
+  const priceNow = tn > 0 && qn > 0 ? qn / tn : null;
+  const peakMultiple = history ? history.observePrice(ev.token, priceNow) : null;
+  const firstFill = history?.firstFill(ev.token) ?? null;
+  const fillVelocityPct = firstFill !== null ? Number((fillPct - firstFill).toFixed(2)) : null;
+  const market = computeMarket({
+    quoteReserve, tokenReserve, realQuoteReserve: realQuote as bigint, totalSupply: totalSupply as bigint,
+    quoteSymbol: qMeta.symbol, quoteDecimals: qMeta.decimals, tokenDecimals, fillPct, fillVelocityPct, peakMultiple,
+  });
+  const flow = computeFlow(buys, sells, qMeta.decimals, null);
+  const tape = buildTape(buys, sells, qMeta.decimals, 6);
+
+  // Compound the intelligence: remember this launch for future co-occurrence /
+  // repeat-buyer / DNA analysis.
+  if (history) {
+    const devPct = tx.devBuyWei !== null && tx.devTokens !== null && (totalSupply as bigint) > 0n
+      ? Number(((tx.devTokens as bigint) * 10_000n) / (totalSupply as bigint)) / 100
+      : null;
+    const gBlock = index?.graduationBlock(ev.token) ?? null;
+    history.record({
+      token: ev.token,
+      deployer: ev.deployer,
+      block: Number(ev.blockNumber),
+      timestamp: launchBlock ? Number(launchBlock as bigint) : null,
+      graduated: Boolean(graduated) || gBlock !== null,
+      gradBlock: gBlock !== null ? Number(gBlock) : null,
+      earlyWallets: [...new Set(buys.map((b) => b.buyer.toLowerCase()))],
+      devBuyPct: devPct,
+      socials: Object.values(socials).filter(Boolean).length,
+      topSharePct: allBuys.topRecipientSharePct,
+      fillPct,
+    });
+    history.save();
+  }
+
   return {
     event: ev,
     name: name as string,
@@ -108,10 +211,17 @@ export async function enrichLaunch(ev: LaunchEvent, index?: DeployerIndex): Prom
     exemptions: tx.exemptions,
     curve: { realQuoteReserve: realQuote as bigint, graduationThreshold: threshold as bigint, fillPct, sellableTokens: sellable as bigint, reservedTokens: reserved as bigint, readyToGraduate: Boolean(ready), openingTaxBps, creatorTaxBps: creatorTax as bigint },
     buyers: allBuys,
+    earlySamples: buys,
+    market,
+    flow,
+    tape,
     deployer: stats,
+    clusters,
+    dna,
+    opportunity: null, // filled by the CLI once the score is known
     timestamp: launchBlock ? Number(launchBlock as bigint) : null,
     fingerprint,
-    fundingAnalysis: "unavailable",
+    fundingAnalysis: funding ? "available" : "unavailable",
     dataGaps: gaps,
   };
 }
