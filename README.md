@@ -72,7 +72,8 @@ npm run scan -- 0xTokenAddress
 | `npm run doctor` | Check RPC connectivity and configured chain | yes |
 | `npm run hunt` | Follow new launches and print scored profiles | yes |
 | `npm run scan -- <address>` | Enrich and score one token | yes |
-| `npm run backfill` | Inspect a recent block window | yes |
+| `npm run backfill` | Profile a recent window, then rank it as an **opportunity board** | yes |
+| `npm run dev -- rewind <address>` | **REWIND** — replay what the radar saw for a token over time | yes |
 | `npm run typecheck` | Validate TypeScript without emitting files | no |
 | `npm test` | Run scoring and behavior tests | no |
 
@@ -113,6 +114,118 @@ RADAR_FOMO_APPS="Pump.fun=https://pump.fun/{token},Bolt=https://bolt.xyz/t/{toke
 
 The `--json` output also includes a `links` object with the resolved Pons,
 chart, deployer, and FOMO URLs for downstream automation.
+
+## Opportunity Ranking
+
+A score answers *"how clean is this launch?"*. A trader also needs *"is this an
+unusually good spot to be early?"*. Each card carries an **opportunity read**,
+and `backfill` prints a ranked **opportunity board**:
+
+```text
+OPPORTUNITIES  ranked by opportunity, best first
+#1 $DOG    opp 100  EARLY  accel HIGH    comps 12/19  UNUSUALLY EARLY
+#2 $MOON   opp 78   MID    accel MEDIUM  comps 12/19  BROAD DEMAND
+#3 $CAT    opp 49   LATE   accel LOW     comps 12/19
+#4 $RUG    opp 47   EARLY  accel LOW     comps 12/19  COORDINATED — CAUTION
+```
+
+Opportunity blends the honest score with **earliness** (curve fill), **demand
+acceleration** (independent-buyer growth across snapshots), **independence** of
+that demand (clusters remove fake breadth), the deployer's graduation habit, and
+how **comparable historical setups** resolved (`comps 12/19` = 12 of 19 similar
+past launches graduated). `UNUSUALLY EARLY` flags a strong setup still under 25%
+filled; `COORDINATED — CAUTION` fires when the breadth is a cluster, not a crowd.
+
+## REWIND
+
+The radar sees every launch from block zero. `rewind <token>` replays what it saw
+over time — score climbing, the moment a critical signal fired, the market cap at
+that moment, and the eventual peak:
+
+```text
+🚀 $WILLOW   REWIND
+T+0        score 42   9.0K HOOD MC
+T+38s      score 61   14.0K HOOD MC
+T+2m14s    ⚡ CRITICAL SIGNAL
+   • 23 independent buyers
+   • buyer velocity +283%
+   • concentration falling
+T+22m      score 62   2.2M HOOD MC
+
+MC at signal 18.4K HOOD   peak 2.2M HOOD   122.2×
+```
+
+The timeline is built from the snapshot series the radar records as it re-sees a
+token, so it fills in the more you run `hunt` / `scan`. Great for studying (or
+proving) the setup that preceded a run.
+
+## Live market read & the tape
+
+Every card leads with a market line and ends with the tape — priced in the pair
+token (**HOOD**), the way pons actually quotes, not ETH:
+
+```text
+MARKET  price 1.2e-5 HOOD  mcap 18.4K HOOD  liq 25.02 HOOD  fill 24.8% ▲+2.1  peak 122.2×
+...
+THE TAPE
+  ▲ buy   0.100 HOOD   0x…2001
+  ▼ sell  0.500 HOOD   0x…2003 taxed
+```
+
+Price and market cap are the implied spot from the curve reserves; `▲+2.1` is
+fill momentum since the last look; buy/sell **pressure** appears in the metric
+grid (`2.0× buy 14b/2s`).
+
+## Wallet Intelligence Graph
+
+`20 buyers` is a number. It is not intelligence. The graph reads the early
+crowd and tells you whether that demand is *real* or *manufactured* — grouping
+addresses into coordinated clusters, each link explained:
+
+```text
+WALLET GRAPH  14 buyers → 1 cluster · 10 independent   INSIDER CLUSTER
+▸ A  INSIDER 99%  4 wallets
+  ├ 4 funded from 0x0000…f00d
+  ├ 4 repeatedly buy this deployer's launches
+  ├ 4 entered within 2 blocks
+  ├ 24 historical co-occurrences
+  └ 4 route tokens to 0x0000…dead
+```
+
+Five independent signals, each degrading on its own when its source is absent:
+
+| Signal | What it catches |
+| --- | --- |
+| **temporal** | wallets entering within a tight block window |
+| **funnel** | many buyers routing tokens to one recipient |
+| **co-occurrence** | wallets seen together across prior recorded launches |
+| **repeat** | wallets that keep buying this deployer's launches |
+| **funding** | wallets funded from the same source *(optional adapter)* |
+
+Verdicts: **INSIDER CLUSTER** (coordinated, high confidence), **LIKELY BUNDLE**
+(coordinated, lower confidence), **INDEPENDENT DEMAND** (genuinely broad). The
+cluster verdict also feeds the score.
+
+Co-occurrence, repeat, and DNA all draw on a small **persistent memory** of
+launches the radar has already profiled (`.meme-radar-history.json`), so the
+intelligence compounds the longer you run it. Funding-source linking is the one
+signal that needs an external lookup — enable it with `RADAR_FUNDING=on` (it
+resolves each early buyer's first funder via Blockscout).
+
+## Deployer DNA
+
+Deployer history gives counts; DNA turns them into a behavioural fingerprint you
+can pattern-match a fresh launch against:
+
+```text
+DEPLOYER DNA  0x0000…d000
+47 launches  9 grad (19%)  38m med→grad  9 med wallets  1.2% med dev
+typical  low dev buy · ~6–12 early wallets · peak window ~38m
+```
+
+`med→grad`, `med wallets`, and `med dev` are medians over the launches the radar
+has recorded for that deployer; peak-multiple is intentionally left blank until a
+price adapter is wired, rather than guessed.
 
 ## Example
 
@@ -199,4 +312,3 @@ MIT — see [`LICENSE`](LICENSE).
 <div align="center">
   <sub>Built for research on Robinhood Chain. Never treat a score as financial advice.</sub>
 </div>
-
