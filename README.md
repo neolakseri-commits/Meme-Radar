@@ -80,29 +80,66 @@ Useful options:
 
 ```bash
 npm run hunt -- --no-history --for 60
+npm run hunt -- --no-fomo          # hide the quick-trade strip
 npm run backfill -- --blocks 100
 npm run scan -- 0xTokenAddress --json
 ```
 
+## Quick trade (Pump.fun / FOMO)
+
+Every card ends with a `⚡ TRADE` strip that turns the detected token into
+one-click **buttons** — clickable in any terminal that supports hyperlinks
+(iTerm2, WezTerm, Kitty, Windows Terminal, GNOME Terminal, and more):
+
+```text
+⚡ TRADE  [Pump.fun] [FOMO] [Pons] [Chart] [Deployer]
+```
+
+The native Robinhood-Chain venues (Pons, Blockscout chart, deployer page) are
+always wired. The external FOMO apps are template-driven, so you can point them
+at whatever front-end you actually trade on:
+
+| Variable | Effect |
+| --- | --- |
+| `RADAR_FOMO=off` / `--no-fomo` | Hide the quick-trade strip entirely |
+| `RADAR_FOMO_APPS` | Custom apps, `Name=url` comma-separated. `{token}` and `{deployer}` are substituted |
+| `RADAR_NO_HYPERLINKS=1` | Keep the button labels but disable clickable links |
+| `NO_COLOR=1` | Plain, monochrome output for logs and pipes |
+
+```bash
+# Wire your own FOMO front-ends
+RADAR_FOMO_APPS="Pump.fun=https://pump.fun/{token},Bolt=https://bolt.xyz/t/{token}" npm run hunt
+```
+
+The `--json` output also includes a `links` object with the resolved Pons,
+chart, deployer, and FOMO URLs for downstream automation.
+
 ## Example
 
 ```text
-╭─ $MELON / 0xabc…def ─────────────────────────────────────────────╮
-│ SIGNAL  87/100   launch age 42s   curve 12.4%   buyers 14       │
-│                                                                  │
-│ + dev bought 2.1%                                                │
-│ + 14 independent buyers observed                                │
-│ + liquidity/curve activity is growing                            │
-│ + deployer has prior graduated launches                          │
-│                                                                  │
-│ - 2 linked wallets                                                │
-│ - 18% observed supply concentration                              │
-│                                                                  │
-│ verdict: unusual launch — review the evidence before acting     │
-╰──────────────────────────────────────────────────────────────────╯
+▌ 06:56:07   SIGNAL   $WILLOW  ████████████ 100/100  ·curve
+▌ WILLOW ROAD MENLO PARK  0x36fe…2eB9
+▌
+▌ EVIDENCE
+▌ +15 dev buy 2.10%                    +10 creator tax 0.00%
+▌ +8 2 social links                    +5 no declared bundle wallets
+▌ +10 14 early buyers                  -10 supply concentration 18.0%
+▌ +15 deployer graduated 3/3
+▌
+▌ dev buy     2.10% 0.21Ξ              early flow 14 buyers / 16 buys · 2 taxed
+▌ curve fill  ▰▱▱▱▱▱ 24.8% 2.01/8.09Ξ  top holder 18.0%
+▌ opening tax 0.19%                    bundle     none
+▌ deployer    3 launches 3 grad        funding    — indexer adapter
+▌
+▌ ⚡ TRADE  [Pump.fun] [FOMO] [Pons] [Chart] [Deployer]
+▙▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 ```
 
-The exact fields depend on what the chain exposes for the launch and the configured observation window. Missing evidence is shown as missing; it is not silently converted into a positive signal.
+In a real terminal the left edge, badge, gauge, and metric values are colour-
+coded by verdict (orange = signal, yellow = watch, red = no signal), and the
+`⚡ TRADE` buttons are clickable. The exact fields depend on what the chain
+exposes for the launch and the configured observation window. Missing evidence
+is shown as missing; it is not silently converted into a positive signal.
 
 ## Signal model
 
@@ -162,3 +199,4 @@ MIT — see [`LICENSE`](LICENSE).
 <div align="center">
   <sub>Built for research on Robinhood Chain. Never treat a score as financial advice.</sub>
 </div>
+
