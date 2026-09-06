@@ -2,3 +2,4 @@ node_modules/
 .npm-cache/
 dist/
 .env
+.meme-radar-history.json
