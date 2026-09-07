@@ -83,8 +83,37 @@ Useful options:
 npm run hunt -- --no-history --for 60
 npm run hunt -- --no-fomo          # hide the quick-trade strip
 npm run backfill -- --blocks 100
+npm run rotation -- --blocks 2000 # rank launches by observed net flow
 npm run scan -- 0xTokenAddress --json
 ```
+
+## Momentum intelligence
+
+Every enriched launch now gets a compact lifecycle read instead of a score
+alone:
+
+```text
+MOMENTUM INTELLIGENCE
+lifecycle ACCELERATION    signal BUILDING ▲
+demand quality 92/100    wallet rotation HIGH
+buy pressure 2.7x        buyer velocity +183%
+exit risk 14/100          data confidence 100/100
+```
+
+The same card can show a `GRADUATION RADAR` with fill velocity and ETA, a
+`POOL HEALTH` panel after graduation, and observed `CAPITAL ROTATION` in the
+quote asset. A first observation is allowed to say `—`; the tool does not
+invent a rate before it has two timed snapshots.
+
+Lifecycle labels are:
+
+```text
+LAUNCH → ACCUMULATION → ACCELERATION → GRADUATION
+       → POOL EXPANSION → DISTRIBUTION → DECAY
+```
+
+Use `npm run rotation` for a compact cross-launch flow ranking. It is based on
+the currently observed window, not a claim about lifetime market flow.
 
 ## Quick trade (Pump.fun / FOMO)
 
